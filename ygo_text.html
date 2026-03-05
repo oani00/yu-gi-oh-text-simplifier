@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Yu-Gi-Oh Text Simplifier</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #171a21;
+      --panel-border: #2a2f3a;
+      --text: #e6e6e6;
+      --muted: #9aa3b2;
+      --accent: #3b82f6;
+      --ansi-red: #ff5555;
+      --ansi-green: #55ff55;
+      --ansi-blue: #5555ff;
+      --ansi-yellow: #ffff55;
+      --ansi-magenta: #ff55ff;
+      --ansi-cyan: #55ffff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Segoe UI, system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+
+    .app {
+      width: min(1200px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 20px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 480px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    textarea {
+      width: 100%;
+      flex: 1;
+      min-height: 300px;
+      resize: vertical;
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      background: #0c0f14;
+      color: var(--text);
+      padding: 12px;
+      line-height: 1.5;
+      font-size: 0.95rem;
+      outline: none;
+    }
+
+    textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+
+    .output {
+      flex: 1;
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      background: #0c0f14;
+      padding: 12px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .output p {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.95rem;
+      line-height: 1.4;
+      font-weight: 600;
+    }
+
+    .output p span {
+      display: inline;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-style: italic;
+      font-weight: 400;
+    }
+
+    @media (max-width: 900px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .panel {
+        min-height: 320px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="panel">
+      <h2>Input</h2>
+      <p class="hint">Enter Yu-Gi-Oh text. Line separators (<code>. : ;</code> and newline) force new paragraphs, while comma-only breaks only change color.</p>
+      <textarea id="inputText" placeholder="Type effect text here..."></textarea>
+    </section>
+
+    <section class="panel">
+      <h2>Output</h2>
+      <p class="hint">Random start color, then cycle through spans for each separator distinction.</p>
+      <div id="output" class="output">
+        <p class="empty">Simplified lines will appear here.</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Cycle through this palette when assigning colors to each segment.
+    const COLORS = [
+      'var(--ansi-red)',
+      'var(--ansi-green)',
+      'var(--ansi-blue)',
+      'var(--ansi-yellow)',
+      'var(--ansi-magenta)',
+      'var(--ansi-cyan)'
+    ];
+
+    // These characters flush the current paragraph and start a new one.
+    const LINE_BREAK_SEPARATORS = new Set(['.', ':', ';']);
+    // Commas only split into a new colored span but keep the paragraph flowing.
+    const COLOR_ONLY_SEPARATOR = ',';
+
+    function simplifyYugiohText(text) {
+      const lines = []; // Collection of paragraphs to render
+      let currentLine = [];
+      let builder = '';
+      const startIndex = Math.floor(Math.random() * COLORS.length);
+      let colorCursor = startIndex;
+
+      // Ensure we only keep segments with visible characters.
+      const containsVisible = (str) => /\S/.test(str);
+
+      const pushSegment = () => {
+        if (!builder || !containsVisible(builder)) {
+          builder = '';
+          return;
+        }
+
+        currentLine.push({
+          text: builder,
+          color: COLORS[colorCursor % COLORS.length]
+        });
+        colorCursor++;
+        builder = '';
+      };
+
+      const pushLine = () => {
+        if (currentLine.length > 0) {
+          lines.push(currentLine);
+          currentLine = [];
+        }
+      };
+
+      for (const char of text) {
+        if (char === '\n') {
+          pushSegment();
+          pushLine();
+          continue;
+        }
+
+        builder += char;
+
+        if (char === COLOR_ONLY_SEPARATOR) {
+          pushSegment();
+          continue;
+        }
+
+        if (LINE_BREAK_SEPARATORS.has(char)) {
+          pushSegment();
+          pushLine();
+        }
+      }
+
+      pushSegment();
+      pushLine();
+
+      return lines;
+    }
+
+    function renderOutput(lines) {
+      const output = document.getElementById('output');
+      output.innerHTML = '';
+
+      if (lines.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'empty';
+        empty.textContent = 'Simplified lines will appear here.';
+        output.appendChild(empty);
+        return;
+      }
+
+      for (const line of lines) {
+        const p = document.createElement('p');
+        for (const segment of line) {
+          const span = document.createElement('span');
+          span.textContent = segment.text; // text includes separators
+          span.style.color = segment.color; // every span gets its own color
+          p.appendChild(span);
+        }
+        output.appendChild(p);
+      }
+    }
+
+    const input = document.getElementById('inputText');
+
+    // Watch the textarea and update live as the user types.
+    input.addEventListener('input', () => {
+      const text = input.value;
+
+      if (!text.trim()) {
+        renderOutput([]);
+        return;
+      }
+
+      renderOutput(simplifyYugiohText(text));
+    });
+  </script>
+</body>
+</html>
